@@ -1,0 +1,158 @@
+#!/usr/bin/env node
+
+const request = require( "request" );
+const async = require( "async" );
+const extract = require( "pdf-text-extract" );
+const tmp = require( "tmp" );
+const fs = require( "fs" );
+const path = require( "path" );
+const util = require( "util" );
+
+const OFFICIAL_QUESTION_PDF_URL = "https://apc-cap.ic.gc.ca/datafiles/amateur_advanced_questions_en.PDF";
+
+const parseQuestions = function( _arrayOfStrings ){
+
+	//console.log( _arrayOfStrings );
+
+	let questions = [ ];
+
+	const defaultCurrent = {
+		questionId: "",
+		answer: "",
+		answers: [ ],
+	};
+
+	let current = defaultCurrent;
+
+	_arrayOfStrings.forEach( function( questionLine ){
+		if( questionLine.match( /^[A-Z]-[0-9]*-[0-9]*-[0-9]*/ ) ){
+
+			if( current.questionId !== "" ){
+				// If we hit a question line and 
+				// we have something in current, let's
+				// push the current to the questions and
+				// reset the current.
+
+				questions.push( current );
+				current = defaultCurrent;
+			}
+
+			// Figure out the answer
+			const _answerBit = questionLine.match( /\(.\)/ );
+			current.answer = questionLine.substr(_answerBit.index,3).replace(/[\(\)]/g,'');
+
+			current.questionId = questionLine.replace( /\s.*/, "" );
+		}else if( questionLine.match( /^[ABCD](\s){2,}/ ) ){
+			
+			// We have a potential answer
+
+			// Let's split out the parts, in particular we want
+			// the letter and any text that may be all or part of the
+			// answer.
+			
+			const _letter = questionLine.substr(0,1);
+			const _answerText = questionLine.substr(1).replace(/^\s*/,"");
+			
+			current.answers.push( {
+				letter: _letter,
+				textLines: [ _answerText ]
+			} );
+
+		}else{
+			// just a random line of text, whether its part of the question
+			// or part of a potential answer; We can determine this based 
+			// on the current state.
+			
+		}
+	} );
+	
+	return questions;
+};
+
+async.waterfall( [ function( cb ){
+	// Create a temporary directory
+	tmp.dir( cb );
+}, function( _tmpPath, tmpCleanupCb, cb ){
+
+	const _pdfPath = path.join( _tmpPath, "questions.pdf" );
+
+	const _ws = fs.createWriteStream( _pdfPath );
+
+	_ws.once( "error", cb );
+	
+	_ws.once( "close", function( ){
+		return cb( null, _pdfPath, tmpCleanupCb );
+	} );
+
+	request( OFFICIAL_QUESTION_PDF_URL ).pipe( _ws );
+
+}, function( pathToPdf, tmpCleanupCb, cb ){
+	
+	extract( pathToPdf, function( err, pages ){
+		if( err ){ return cb( err ); }
+
+		return cb( null, pages, tmpCleanupCb );
+	} );
+}, function( pagesText, tmpCleanupCb, cb ){
+
+	pagesText.splice( 0, 2 );
+
+	let _questions = [ ];
+
+	// Note that the questions start on the 3rd page.
+	// We can simply get rid of the first two.
+	pagesText.forEach( function( pageText ){
+		const _lines = pageText.split( "\n" );
+
+		// Parse the first line, it let's us know 
+		// at what character line we should consider column
+		// a to be over, and column b to be starting.
+
+		const _first_line = _lines[0];
+
+		const _questionMatches = _first_line.match( /[A-Z]-[0-9]*-[0-9]*-[0-9]*/g );
+
+		// _questionMatches looks like this:
+		// [ 'A-001-001-001', 'A-001-001-005', [length]: 2 ]
+
+		// This allows us ot determine the position of the 2nd one.
+		const _columnBOffset = _first_line.match( _questionMatches[1] ).index;
+
+		
+		let _columnA = [ ];
+		let _columnB = [ ];
+		_lines.forEach( function( _line ){
+
+			const _columnAPart = _line.substring( 0, _columnBOffset );
+			const _columnBPart = _line.substring( _columnBOffset );
+			
+			_columnA.push( _columnAPart );
+			_columnB.push( _columnBPart );
+		} );
+
+		// At this point we have both columns which are arrays of text
+		// strings.
+
+		// Let's start parsing the questions..
+		parseQuestions( _columnA.concat( _columnB ) ).forEach( function( _question ){
+			_questions.push( _question );
+		} );
+	} );
+
+	return cb( null, _questions, tmpCleanupCb );
+
+}, function( _questions, tmpCleanupCb, cb ){
+
+	console.log( "I have question objs of " );
+	console.log(_questions.length );
+
+	return cb( null );
+
+} ], function( err ){
+	if( err ){
+		console.log( err );
+		process.exit( 1 );
+	}
+
+	
+} );
