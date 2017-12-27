@@ -12,14 +12,13 @@ const OFFICIAL_QUESTION_PDF_URL = "https://apc-cap.ic.gc.ca/datafiles/amateur_ad
 
 const parseQuestions = function( _arrayOfStrings ){
 
-	//console.log( _arrayOfStrings );
-
 	let questions = [ ];
 
 	const defaultCurrent = {
 		questionId: "",
 		answer: "",
 		answers: [ ],
+		questionText: "",
 	};
 
 	let current = defaultCurrent;
@@ -27,20 +26,24 @@ const parseQuestions = function( _arrayOfStrings ){
 	_arrayOfStrings.forEach( function( questionLine ){
 		if( questionLine.match( /^[A-Z]-[0-9]*-[0-9]*-[0-9]*/ ) ){
 
-			if( current.questionId !== "" ){
+			if( current.questionText !== "" ){
 				// If we hit a question line and 
 				// we have something in current, let's
 				// push the current to the questions and
 				// reset the current.
 
 				questions.push( current );
-				current = defaultCurrent;
+				current = {
+					questionId: "",
+					answer: "",
+					answers: [ ],
+					questionText: "",
+				};
 			}
 
 			// Figure out the answer
 			const _answerBit = questionLine.match( /\(.\)/ );
 			current.answer = questionLine.substr(_answerBit.index,3).replace(/[\(\)]/g,'');
-
 			current.questionId = questionLine.replace( /\s.*/, "" );
 		}else if( questionLine.match( /^[ABCD](\s){2,}/ ) ){
 			
@@ -51,18 +54,21 @@ const parseQuestions = function( _arrayOfStrings ){
 			// answer.
 			
 			const _letter = questionLine.substr(0,1);
-			const _answerText = questionLine.substr(1).replace(/^\s*/,"");
-			
+			const _answerText = " " + questionLine.substr(1).replace(/^\s*/,"").trim();
 			current.answers.push( {
 				letter: _letter,
-				textLines: [ _answerText ]
+				text: _answerText.trim()
 			} );
 
 		}else{
 			// just a random line of text, whether its part of the question
 			// or part of a potential answer; We can determine this based 
 			// on the current state.
-			
+			if( current.answers.length == 0 ){
+				current.questionText += questionLine.trim();
+			}else{
+				current.answers[current.answers.length-1].text += questionLine.trim();
+			}
 		}
 	} );
 	
@@ -74,6 +80,7 @@ async.waterfall( [ function( cb ){
 	tmp.dir( cb );
 }, function( _tmpPath, tmpCleanupCb, cb ){
 
+	/*
 	const _pdfPath = path.join( _tmpPath, "questions.pdf" );
 
 	const _ws = fs.createWriteStream( _pdfPath );
@@ -85,6 +92,9 @@ async.waterfall( [ function( cb ){
 	} );
 
 	request( OFFICIAL_QUESTION_PDF_URL ).pipe( _ws );
+	*/
+
+	return cb( null, "/Users/robertkeizer/Desktop/amateur_advanced_questions_en.PDF", tmpCleanupCb );
 
 }, function( pathToPdf, tmpCleanupCb, cb ){
 	
@@ -93,6 +103,7 @@ async.waterfall( [ function( cb ){
 
 		return cb( null, pages, tmpCleanupCb );
 	} );
+
 }, function( pagesText, tmpCleanupCb, cb ){
 
 	pagesText.splice( 0, 2 );
@@ -144,7 +155,7 @@ async.waterfall( [ function( cb ){
 }, function( _questions, tmpCleanupCb, cb ){
 
 	console.log( "I have question objs of " );
-	console.log(_questions.length );
+	console.log( util.inspect( _questions, true, 9 ) );
 
 	return cb( null );
 
