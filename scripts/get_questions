@@ -80,7 +80,6 @@ async.waterfall( [ function( cb ){
 	tmp.dir( cb );
 }, function( _tmpPath, tmpCleanupCb, cb ){
 
-	/*
 	const _pdfPath = path.join( _tmpPath, "questions.pdf" );
 
 	const _ws = fs.createWriteStream( _pdfPath );
@@ -92,19 +91,16 @@ async.waterfall( [ function( cb ){
 	} );
 
 	request( OFFICIAL_QUESTION_PDF_URL ).pipe( _ws );
-	*/
-
-	return cb( null, "/Users/robertkeizer/Desktop/amateur_advanced_questions_en.PDF", tmpCleanupCb );
 
 }, function( pathToPdf, tmpCleanupCb, cb ){
 	
 	extract( pathToPdf, function( err, pages ){
 		if( err ){ return cb( err ); }
 
-		return cb( null, pages, tmpCleanupCb );
+		return cb( null, pages, tmpCleanupCb, pathToPdf );
 	} );
 
-}, function( pagesText, tmpCleanupCb, cb ){
+}, function( pagesText, tmpCleanupCb, pathToPdf, cb ){
 
 	pagesText.splice( 0, 2 );
 
@@ -150,20 +146,26 @@ async.waterfall( [ function( cb ){
 		} );
 	} );
 
-	return cb( null, _questions, tmpCleanupCb );
+	return cb( null, _questions, tmpCleanupCb, pathToPdf );
+
+}, function( _questions, tmpCleanupCb, pathToPdf, cb ){
+	
+	// Let's remove the pdf so that our cleanup function works.
+	fs.unlink( pathToPdf, function( err ){
+		return cb( err, _questions, tmpCleanupCb );
+	} );
 
 }, function( _questions, tmpCleanupCb, cb ){
 
-	console.log( "I have question objs of " );
-	console.log( util.inspect( _questions, true, 9 ) );
+	tmpCleanupCb( function( err ){
+		return cb( err, _questions );
+	} );
 
-	return cb( null );
-
-} ], function( err ){
+} ], function( err, questions ){
 	if( err ){
 		console.log( err );
 		process.exit( 1 );
 	}
 
-	
+	console.log( JSON.stringify( questions ) );
 } );
