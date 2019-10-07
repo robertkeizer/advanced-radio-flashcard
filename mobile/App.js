@@ -178,10 +178,10 @@ class AnswerList extends Component {
 								<Text>{_answer.letter} - {_answer.text}</Text>
 							</Left>
 							{showQuestionAnswer && _answer.correct && 
-								<Icon name="checkmark" style={{ color: "green" }} />
+								<Icon name="checkmark" style={{ color: "green" , fontSize: 50 }} />
 							}
 							{showQuestionAnswer && selectedQuestion == i && !_answer.correct &&
-								<Icon name="close" style={{ color:"red"}} />
+								<Icon name="close" style={{ color:"red", fontSize: 50}} />
 							}
 						</View>
 					</Button>
@@ -214,7 +214,7 @@ export default class App extends Component<{}> {
 		this.state = {
 			quizMode: true,
 			questionIndex: 1,
-			numQuizQuestions: 5,
+			numQuizQuestions: 50,
 			incorrectQuestionCount: 0,
 			smallHeaderSize: 12,
 			shouldResetQuiz: false,
@@ -224,7 +224,7 @@ export default class App extends Component<{}> {
 	onQuizReset( ) {
 		this.setState( {
 			questionIndex: 1,
-			numQuizQuestions: 5,
+			numQuizQuestions: 50,
 			incorrectQuestionCount: 0,
 			shouldResetQuiz: false,
 		} );
